@@ -1,50 +1,118 @@
 # dual_a7_bridge
 
-This project merges the original A7 Linux WebSocket bridge and the M4 OpenAMP/FDCAN logic into one Ubuntu userspace application.
+`dual_a7_bridge` is a C99 WebSocket-to-CAN bridge for Linux.
+It accepts text commands over WebSocket, sends/receives CAN traffic, and supports higher-level control flows such as firing sequences and wiggle operations.
 
-## What was removed
+## Dependency: simple_ws
 
-- OpenAMP / virt-UART transport
-- M4 HAL / CubeMX startup code
-- second CAN path
-- FDCAN-specific code paths
-- pyrometer support
-- UART bridge code used only to reach the M4
-- timing test code
+This project requires the `simple_ws` library:
 
-## What remains
+- Repository: https://github.com/AtPapadop/simple_ws
+- CMake requirement in this project: `find_package(simple_ws REQUIRED)`
 
-- WebSocket server using `simple_ws`
-- direct SocketCAN access on `can0`
-- receive latest CAN values and broadcast them to WebSocket clients
-- command parsing for:
-  - `READ-ENABLE`
-  - `READ-DISABLE`
-  - `STATE#PRECHILLING`
-  - `STATE#HOTFIRE`
-  - `WIGGLE|...`
-  - `WIGGLE_STOP|...`
-  - `SET_VALVE#...`
-  - `FIRE#8765|...`
-  - `DROWN#8765`
-  - `ABORT#8765`
-  - raw CAN commands: `<id>#<value>` and `<id>#<value>#<time_ms>`
+Install `simple_ws` first so CMake can find it.
 
-## Notes
-
-- `CAN1|` is accepted for backward compatibility but ignored; everything goes to `can0`.
-- In `PRECHILLING`, only local control commands are accepted. Raw CAN and firing commands are rejected, matching the original A7-side gating.
-- Incoming CAN values are packed into the same `id#value|id#value` text form and broadcast periodically with a realtime-nanoseconds prefix.
-
-## Build
+Example install flow:
 
 ```bash
-cmake -S . -B build
+git clone https://github.com/AtPapadop/simple_ws.git
+cd simple_ws
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
+sudo cmake --install build
+```
+
+If installed to a non-standard prefix (i.e not in `/usr/local`), provide it when configuring this project:
+
+```bash
+cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/simple_ws/install
+```
+
+## Build Instructions
+
+From this repository root
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+The executable is written to:
+
+```text
+./bin/dual_a7_bridge
 ```
 
 ## Run
 
+Basic run:
+
 ```bash
-./build/dual_a7_bridge --port 8080 --can-if can0
+./bin/dual_a7_bridge
+```
+
+Run with explicit options:
+
+```bash
+./bin/dual_a7_bridge --port 8080 --max-clients 128 --can-if can0 --tick-ms 5
+```
+
+Enable logging:
+
+```bash
+./bin/dual_a7_bridge --logging --log-path /tmp/ws_can_bridge.csv
+```
+
+Read-only mode (blocks write commands):
+
+```bash
+./bin/dual_a7_bridge --read-only
+```
+
+### CLI Options
+
+- `--port N`: WebSocket server port (default: `8080`)
+- `--max-clients N`: max concurrent WebSocket clients (default: `128`)
+- `--read-only`: reject command execution
+- `--logging`: enable CSV logging
+- `--can-if IFACE`: CAN interface name (default: `can0`)
+- `--tick-ms N`: internal tick interval in ms (default: `5`)
+- `--log-path PATH`: log output path (default: `/usr/local/data/ws_can_bridge.csv`)
+
+## Command Reference (WebSocket Text Frames)
+
+Commands below are sent as plain text WebSocket messages.
+You may optionally prefix any command with `CAN1|`.
+
+| Command | Example | Notes |
+|---|---|---|
+| `READ-DISABLE` | `READ-DISABLE` | Per-client write-only mode on. |
+| `READ-ENABLE` | `READ-ENABLE` | Per-client write-only mode off. |
+| `STATE#PRECHILLING` | `STATE#PRECHILLING` | Set system state to PRECHILLING. |
+| `STATE#HOTFIRE` | `STATE#HOTFIRE` | Set system state to HOTFIRE. |
+| `SET_VALVE#LOX_MAIN#<hex_id>` | `SET_VALVE#LOX_MAIN#101` | CAN ID must be `<= 0x7FF`. |
+| `SET_VALVE#LOX_VENT#<hex_id>` | `SET_VALVE#LOX_VENT#102` | CAN ID must be `<= 0x7FF`. |
+| `SET_VALVE#LOX_MAIN_ANGLE_OPEN#<hex_angle>` | `SET_VALVE#LOX_MAIN_ANGLE_OPEN#05a` | Angle must be `<= 0x0B4`. |
+| `SET_VALVE#LOX_VENT_ANGLE_CLOSE#<hex_angle>` | `SET_VALVE#LOX_VENT_ANGLE_CLOSE#032` | Angle must be `<= 0x0B4`. |
+| `DROWN#8765` | `DROWN#8765` | Runs injector drowning sequence using configured valve profile. |
+| `ABORT#8765` | `ABORT#8765` | Aborts active firing and stops all wiggles. |
+| `FIRE#8765|`FIRE#8765\|101#0032#100#50\|102#0020#80` | Fire sequence blocks: `id#value#duration_ms[#wait_ms]`. |
+| `WIGGLE| `WIGGLE\|101#0010#0020#0000#250#5000\|102#0030#0040#0000#300` | Entry format: `id#start#end#exit#period_ms[#total_ms]`. |
+| `WIGGLE_STOP| `WIGGLE_STOP\|101\|102` | Stops active wiggles by CAN IDs. |
+| `<hex_id>#<hex_value>` | `101#002a` | Raw CAN send with zero duration. |
+| `<hex_id>#<hex_value>#<duration_ms>` | `101#002a#250` | Raw CAN send with duration. |
+
+## Behavioral Notes
+
+- Non-text WebSocket frames are ignored.
+- When server starts in global `--read-only` mode, command execution is denied.
+- In `PRECHILLING` state, non-wiggle operational commands are ignored.
+- Firing sequence start includes an internal T-10s delay for standard `FIRE` commands.
+
+## Typical Developer Workflow
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build
+./bin/dual_a7_bridge --can-if can0 --port 8080
 ```
