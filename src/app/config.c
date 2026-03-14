@@ -1,0 +1,103 @@
+#define _POSIX_C_SOURCE 200809L
+
+#include "app/config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+void app_config_init_defaults(app_config_t *cfg)
+{
+	if (!cfg)
+	{
+		return;
+	}
+
+	memset(cfg, 0, sizeof(*cfg));
+	cfg->ws_port = 8080;
+	cfg->max_clients = 128;
+	cfg->read_only = false;
+	cfg->logging_enabled = false;
+	cfg->tick_interval_ms = 5;
+	snprintf(cfg->can_ifname, sizeof(cfg->can_ifname), "can0");
+	snprintf(cfg->log_path, sizeof(cfg->log_path), "/usr/local/data/ws_can_bridge.csv");
+}
+
+static void print_usage_and_exit(const char *argv0)
+{
+	fprintf(stderr,
+					"Usage: %s [--port N] [--max-clients N] [--read-only] [--logging] "
+					"[--can-if can0] [--tick-ms N] [--log-path PATH]\n",
+					argv0);
+	exit(EXIT_FAILURE);
+}
+
+int app_config_parse(app_config_t *cfg, int argc, char **argv)
+{
+	if (!cfg)
+	{
+		return -1;
+	}
+
+	for (int i = 1; i < argc; ++i)
+	{
+		if (strcmp(argv[i], "--port") == 0 && i + 1 < argc)
+		{
+			cfg->ws_port = (uint16_t)atoi(argv[++i]);
+		}
+		else if (strcmp(argv[i], "--max-clients") == 0 && i + 1 < argc)
+		{
+			cfg->max_clients = atoi(argv[++i]);
+		}
+		else if (strcmp(argv[i], "--read-only") == 0)
+		{
+			cfg->read_only = true;
+		}
+		else if (strcmp(argv[i], "--logging") == 0)
+		{
+			cfg->logging_enabled = true;
+		}
+		else if (strcmp(argv[i], "--can-if") == 0 && i + 1 < argc)
+		{
+			snprintf(cfg->can_ifname, sizeof(cfg->can_ifname), "%s", argv[++i]);
+		}
+		else if (strcmp(argv[i], "--tick-ms") == 0 && i + 1 < argc)
+		{
+			cfg->tick_interval_ms = atoi(argv[++i]);
+		}
+		else if (strcmp(argv[i], "--log-path") == 0 && i + 1 < argc)
+		{
+			snprintf(cfg->log_path, sizeof(cfg->log_path), "%s", argv[++i]);
+		}
+		else
+		{
+			print_usage_and_exit(argv[0]);
+		}
+	}
+
+	if (cfg->ws_port == 0 || cfg->max_clients <= 0 || cfg->tick_interval_ms <= 0)
+	{
+		return -1;
+	}
+
+	return 0;
+}
+
+void app_config_print(const app_config_t *cfg)
+{
+	if (!cfg)
+	{
+		return;
+	}
+
+	printf("WebSocket port: %u\n", cfg->ws_port);
+	printf("Max clients: %d\n", cfg->max_clients);
+	printf("Read only: %s\n", cfg->read_only ? "yes" : "no");
+	printf("Logging: %s\n", cfg->logging_enabled ? "yes" : "no");
+	printf("CAN interface: %s\n", cfg->can_ifname);
+	printf("Tick interval: %d ms\n", cfg->tick_interval_ms);
+	if (cfg->logging_enabled)
+	{
+		printf("Log path: %s\n", cfg->log_path);
+	}
+}
