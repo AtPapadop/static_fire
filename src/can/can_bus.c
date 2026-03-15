@@ -22,6 +22,8 @@
 #include "app/context.h"
 #include "util/logger.h"
 
+#define CAN_STB_GPIO_LINE 37
+
 static int run_command(char *const argv[])
 {
 	pid_t pid = fork();
@@ -69,6 +71,7 @@ int can_bus_configure_interface(const char *ifname, uint32_t bitrate)
 	char *down_cmd[] = {"ip", "link", "set", "dev", (char *)ifname, "down", NULL};
 	char *type_cmd[] = {"ip", "link", "set", "dev", (char *)ifname, "type", "can", "bitrate", bitrate_str, "restart-ms", "100", NULL};
 	char *up_cmd[] = {"ip", "link", "set", "dev", (char *)ifname, "up", NULL};
+	char *gpio_cmd[] = {"sudo", "gpioset", "gpiochip0", "37=0", NULL};
 
 	if (run_command(down_cmd) != 0)
 	{
@@ -82,7 +85,12 @@ int can_bus_configure_interface(const char *ifname, uint32_t bitrate)
 	{
 		return -1;
 	}
-
+	
+	printf("Configuring GPIO line %d to enable CAN transceiver\n", CAN_STB_GPIO_LINE);
+	if (run_command(gpio_cmd) != 0)
+	{
+		return -1;
+	}
 	return 0;
 }
 
