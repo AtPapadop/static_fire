@@ -20,6 +20,7 @@ add_executable(dual_a7_bridge
   src/control/firing_sequence.c
   src/control/state.c
   src/control/wiggle.c
+  src/util/heartbeat.c
   src/util/logger.c
   src/ws/ws_bridge.c
 )

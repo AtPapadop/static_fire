@@ -17,6 +17,7 @@
 #include "can/can_bus.h"
 #include "control/firing_sequence.h"
 #include "control/wiggle.h"
+#include "util/heartbeat.h"
 #include "util/logger.h"
 #include "ws/ws_bridge.h"
 
@@ -176,6 +177,7 @@ int main(int argc, char **argv)
 	}
 
 	printf("Listening on ws://0.0.0.0:%u using CAN interface %s\n", cfg.ws_port, cfg.can_ifname);
+	uint64_t next_heartbeat_ms = heartbeat_now_ms() + HEARTBEAT_PERIOD_MS;
 
 	struct epoll_event events[8];
 	while (!app.stop)
@@ -222,6 +224,21 @@ int main(int argc, char **argv)
 				uint64_t expirations = 0;
 				(void)read(app.timer_fd, &expirations, sizeof(expirations));
 				wiggle_process(&app);
+
+				uint64_t now_ms = heartbeat_now_ms();
+				if (now_ms >= next_heartbeat_ms)
+				{
+					if (heartbeat_send(app.can_fd) != 0)
+					{
+						perror("heartbeat_send");
+					}
+
+					do
+					{
+						next_heartbeat_ms += HEARTBEAT_PERIOD_MS;
+					} while (next_heartbeat_ms <= now_ms);
+				}
+
 				flush_can_updates(&app);
 			}
 		}
