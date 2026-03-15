@@ -329,7 +329,7 @@ static bool handle_raw_can(app_context_t *app, ws_client_t *client, const char *
 		}
 		else
 		{
-			send_reply(app, client, "Error sending message");
+			send_reply(app, client, "Error sending message: %s", strerror(errno));
 		}
 		return true;
 	}
@@ -343,7 +343,7 @@ static bool handle_raw_can(app_context_t *app, ws_client_t *client, const char *
 		}
 		else
 		{
-			send_reply(app, client, "Error sending message");
+			send_reply(app, client, "Error sending message: %s", strerror(errno));
 		}
 		return true;
 	}
