@@ -18,7 +18,9 @@ void app_config_init_defaults(app_config_t *cfg)
 	cfg->max_clients = 128;
 	cfg->read_only = false;
 	cfg->logging_enabled = false;
+	cfg->auto_config_can = true;
 	cfg->tick_interval_ms = 5;
+	cfg->can_bitrate = 500000u;
 	snprintf(cfg->can_ifname, sizeof(cfg->can_ifname), "can0");
 	snprintf(cfg->log_path, sizeof(cfg->log_path), "/usr/local/data/ws_can_bridge.csv");
 }
@@ -27,7 +29,8 @@ static void print_usage_and_exit(const char *argv0)
 {
 	fprintf(stderr,
 					"Usage: %s [--port N] [--max-clients N] [--read-only] [--logging] "
-					"[--can-if can0] [--tick-ms N] [--log-path PATH]\n",
+					"[--can-if can0] [--can-bitrate N] [--no-can-config] "
+					"[--tick-ms N] [--log-path PATH]\n",
 					argv0);
 	exit(EXIT_FAILURE);
 }
@@ -61,6 +64,14 @@ int app_config_parse(app_config_t *cfg, int argc, char **argv)
 		{
 			snprintf(cfg->can_ifname, sizeof(cfg->can_ifname), "%s", argv[++i]);
 		}
+		else if (strcmp(argv[i], "--can-bitrate") == 0 && i + 1 < argc)
+		{
+			cfg->can_bitrate = (uint32_t)strtoul(argv[++i], NULL, 10);
+		}
+		else if (strcmp(argv[i], "--no-can-config") == 0)
+		{
+			cfg->auto_config_can = false;
+		}
 		else if (strcmp(argv[i], "--tick-ms") == 0 && i + 1 < argc)
 		{
 			cfg->tick_interval_ms = atoi(argv[++i]);
@@ -75,7 +86,7 @@ int app_config_parse(app_config_t *cfg, int argc, char **argv)
 		}
 	}
 
-	if (cfg->ws_port == 0 || cfg->max_clients <= 0 || cfg->tick_interval_ms <= 0)
+	if (cfg->ws_port == 0 || cfg->max_clients <= 0 || cfg->tick_interval_ms <= 0 || cfg->can_bitrate == 0)
 	{
 		return -1;
 	}
@@ -95,6 +106,8 @@ void app_config_print(const app_config_t *cfg)
 	printf("Read only: %s\n", cfg->read_only ? "yes" : "no");
 	printf("Logging: %s\n", cfg->logging_enabled ? "yes" : "no");
 	printf("CAN interface: %s\n", cfg->can_ifname);
+	printf("CAN bitrate: %u\n", cfg->can_bitrate);
+	printf("CAN auto-config: %s\n", cfg->auto_config_can ? "yes" : "no");
 	printf("Tick interval: %d ms\n", cfg->tick_interval_ms);
 	if (cfg->logging_enabled)
 	{

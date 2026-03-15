@@ -54,7 +54,7 @@ Basic run:
 Run with explicit options:
 
 ```bash
-./bin/dual_a7_bridge --port 8080 --max-clients 128 --can-if can0 --tick-ms 5
+./bin/dual_a7_bridge --port 8080 --max-clients 128 --can-if can0 --can-bitrate 500000 --tick-ms 5
 ```
 
 Enable logging:
@@ -76,8 +76,21 @@ Read-only mode (blocks write commands):
 - `--read-only`: reject command execution
 - `--logging`: enable CSV logging
 - `--can-if IFACE`: CAN interface name (default: `can0`)
+- `--can-bitrate N`: CAN bitrate in bits/s used for auto-config (default: `500000`)
+- `--no-can-config`: disable startup CAN auto-configuration (`ip link ...`)
 - `--tick-ms N`: internal tick interval in ms (default: `5`)
 - `--log-path PATH`: log output path (default: `/usr/local/data/ws_can_bridge.csv`)
+
+## CAN Interface Setup
+
+By default, the app configures the CAN interface at startup with:
+
+- `ip link set dev <if> down`
+- `ip link set dev <if> type can bitrate <bitrate> restart-ms 100`
+- `ip link set dev <if> up`
+
+This requires sufficient privileges (typically root or `CAP_NET_ADMIN`).
+If your system configures CAN externally (for example with systemd-networkd), run with `--no-can-config`.
 
 ## Command Reference (WebSocket Text Frames)
 

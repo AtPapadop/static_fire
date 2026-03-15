@@ -12,6 +12,7 @@
 #include <inttypes.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <linux/can/raw.h>
@@ -20,6 +21,70 @@
 
 #include "app/context.h"
 #include "util/logger.h"
+
+static int run_command(char *const argv[])
+{
+	pid_t pid = fork();
+	if (pid < 0)
+	{
+		return -1;
+	}
+
+	if (pid == 0)
+	{
+		execvp(argv[0], argv);
+		_exit((errno == ENOENT) ? 127 : 126);
+	}
+
+	int status = 0;
+	while (waitpid(pid, &status, 0) < 0)
+	{
+		if (errno == EINTR)
+		{
+			continue;
+		}
+		return -1;
+	}
+
+	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+	{
+		return 0;
+	}
+
+	errno = EIO;
+	return -1;
+}
+
+int can_bus_configure_interface(const char *ifname, uint32_t bitrate)
+{
+	if (!ifname || !*ifname || bitrate == 0u)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+
+	char bitrate_str[16];
+	(void)snprintf(bitrate_str, sizeof(bitrate_str), "%u", bitrate);
+
+	char *down_cmd[] = {"ip", "link", "set", "dev", (char *)ifname, "down", NULL};
+	char *type_cmd[] = {"ip", "link", "set", "dev", (char *)ifname, "type", "can", "bitrate", bitrate_str, "restart-ms", "100", NULL};
+	char *up_cmd[] = {"ip", "link", "set", "dev", (char *)ifname, "up", NULL};
+
+	if (run_command(down_cmd) != 0)
+	{
+		return -1;
+	}
+	if (run_command(type_cmd) != 0)
+	{
+		return -1;
+	}
+	if (run_command(up_cmd) != 0)
+	{
+		return -1;
+	}
+
+	return 0;
+}
 
 int can_bus_open(const char *ifname)
 {

@@ -7,6 +7,7 @@
 
 struct app_context;
 
+int can_bus_configure_interface(const char *ifname, uint32_t bitrate);
 int can_bus_open(const char *ifname);
 void can_bus_close(int *fd);
 int can_bus_send_command(int fd, uint32_t can_id, uint16_t value, uint16_t duration_ms);

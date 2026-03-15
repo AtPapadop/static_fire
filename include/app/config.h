@@ -10,7 +10,9 @@ typedef struct {
 	int max_clients;
 	bool read_only;
 	bool logging_enabled;
+	bool auto_config_can;
 	int tick_interval_ms;
+	uint32_t can_bitrate;
 	char can_ifname[IF_NAMESIZE];
 	char log_path[256];
 } app_config_t;

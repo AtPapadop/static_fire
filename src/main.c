@@ -42,6 +42,15 @@ static int register_fd(int epoll_fd, int fd)
 
 static int init_runtime(app_context_t *app)
 {
+	if (app->config.auto_config_can)
+	{
+		if (can_bus_configure_interface(app->config.can_ifname, app->config.can_bitrate) != 0)
+		{
+			perror("can_bus_configure_interface");
+			return -1;
+		}
+	}
+
 	app->can_fd = can_bus_open(app->config.can_ifname);
 	if (app->can_fd < 0)
 	{
