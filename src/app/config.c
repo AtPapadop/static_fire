@@ -2,9 +2,12 @@
 
 #include "app/config.h"
 
+#include <errno.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 void app_config_init_defaults(app_config_t *cfg)
 {
@@ -28,11 +31,204 @@ void app_config_init_defaults(app_config_t *cfg)
 static void print_usage_and_exit(const char *argv0)
 {
 	fprintf(stderr,
-					"Usage: %s [--port N] [--max-clients N] [--read-only] [--logging] "
+					"Usage: %s [--config PATH] [--port N] [--max-clients N] [--read-only] [--logging] "
 					"[--can-if can0] [--can-bitrate N] [--no-can-config] "
 					"[--tick-ms N] [--log-path PATH]\n",
 					argv0);
 	exit(EXIT_FAILURE);
+}
+
+static char *trim_whitespace(char *s)
+{
+	if (!s)
+	{
+		return s;
+	}
+
+	while (*s != '\0' && isspace((unsigned char)*s))
+	{
+		++s;
+	}
+
+	char *end = s + strlen(s);
+	while (end > s && isspace((unsigned char)*(end - 1)))
+	{
+		--end;
+	}
+	*end = '\0';
+
+	return s;
+}
+
+static int parse_bool_value(const char *value, bool *out)
+{
+	if (!value || !out)
+	{
+		return -1;
+	}
+
+	if (strcasecmp(value, "1") == 0 || strcasecmp(value, "true") == 0 ||
+		strcasecmp(value, "yes") == 0 || strcasecmp(value, "on") == 0 || strcasecmp(value, "enable") == 0)
+	{
+		*out = true;
+		return 0;
+	}
+
+	if (strcasecmp(value, "0") == 0 || strcasecmp(value, "false") == 0 ||
+		strcasecmp(value, "no") == 0 || strcasecmp(value, "off") == 0 || strcasecmp(value, "disable") == 0)
+	{
+		*out = false;
+		return 0;
+	}
+
+	return -1;
+}
+
+static int apply_config_kv(app_config_t *cfg, const char *key, const char *value, const char *config_path, int line_no)
+{
+	char *endptr = NULL;
+
+	if (strcmp(key, "ws_port") == 0 || strcmp(key, "port") == 0)
+	{
+		unsigned long v = strtoul(value, &endptr, 10);
+		if (*value == '\0' || *endptr != '\0' || v == 0 || v > 65535UL)
+		{
+			fprintf(stderr, "%s:%d invalid ws_port value: %s\n", config_path, line_no, value);
+			return -1;
+		}
+		cfg->ws_port = (uint16_t)v;
+	}
+	else if (strcmp(key, "max_clients") == 0)
+	{
+		long v = strtol(value, &endptr, 10);
+		if (*value == '\0' || *endptr != '\0' || v <= 0)
+		{
+			fprintf(stderr, "%s:%d invalid max_clients value: %s\n", config_path, line_no, value);
+			return -1;
+		}
+		cfg->max_clients = (int)v;
+	}
+	else if (strcmp(key, "read_only") == 0)
+	{
+		if (parse_bool_value(value, &cfg->read_only) != 0)
+		{
+			fprintf(stderr, "%s:%d invalid read_only value: %s\n", config_path, line_no, value);
+			return -1;
+		}
+	}
+	else if (strcmp(key, "logging_enabled") == 0 || strcmp(key, "logging") == 0)
+	{
+		if (parse_bool_value(value, &cfg->logging_enabled) != 0)
+		{
+			fprintf(stderr, "%s:%d invalid logging value: %s\n", config_path, line_no, value);
+			return -1;
+		}
+	}
+	else if (strcmp(key, "auto_config_can") == 0)
+	{
+		if (parse_bool_value(value, &cfg->auto_config_can) != 0)
+		{
+			fprintf(stderr, "%s:%d invalid auto_config_can value: %s\n", config_path, line_no, value);
+			return -1;
+		}
+	}
+	else if (strcmp(key, "tick_interval_ms") == 0 || strcmp(key, "tick_ms") == 0)
+	{
+		long v = strtol(value, &endptr, 10);
+		if (*value == '\0' || *endptr != '\0' || v <= 0)
+		{
+			fprintf(stderr, "%s:%d invalid tick_interval_ms value: %s\n", config_path, line_no, value);
+			return -1;
+		}
+		cfg->tick_interval_ms = (int)v;
+	}
+	else if (strcmp(key, "can_bitrate") == 0)
+	{
+		unsigned long v = strtoul(value, &endptr, 10);
+		if (*value == '\0' || *endptr != '\0' || v == 0)
+		{
+			fprintf(stderr, "%s:%d invalid can_bitrate value: %s\n", config_path, line_no, value);
+			return -1;
+		}
+		cfg->can_bitrate = (uint32_t)v;
+	}
+	else if (strcmp(key, "can_ifname") == 0 || strcmp(key, "can_if") == 0)
+	{
+		snprintf(cfg->can_ifname, sizeof(cfg->can_ifname), "%s", value);
+	}
+	else if (strcmp(key, "log_path") == 0)
+	{
+		snprintf(cfg->log_path, sizeof(cfg->log_path), "%s", value);
+	}
+	else
+	{
+		fprintf(stderr, "%s:%d unknown key: %s\n", config_path, line_no, key);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int app_config_load_file(app_config_t *cfg, const char *config_path)
+{
+	FILE *fp = fopen(config_path, "r");
+	if (!fp)
+	{
+		return -1;
+	}
+
+	char line[512];
+	int line_no = 0;
+	while (fgets(line, sizeof(line), fp) != NULL)
+	{
+		++line_no;
+		char *trimmed = trim_whitespace(line);
+
+		if (*trimmed == '\0' || *trimmed == '#' || *trimmed == ';')
+		{
+			continue;
+		}
+
+		char *eq = strchr(trimmed, '=');
+		if (!eq)
+		{
+			fprintf(stderr, "%s:%d expected key=value\n", config_path, line_no);
+			errno = EINVAL;
+			fclose(fp);
+			return -1;
+		}
+
+		*eq = '\0';
+		char *key = trim_whitespace(trimmed);
+		char *value = trim_whitespace(eq + 1);
+
+		if (*value == '"')
+		{
+			size_t len = strlen(value);
+			if (len >= 2 && value[len - 1] == '"')
+			{
+				value[len - 1] = '\0';
+				++value;
+			}
+		}
+
+		if (apply_config_kv(cfg, key, value, config_path, line_no) != 0)
+		{
+			errno = EINVAL;
+			fclose(fp);
+			return -1;
+		}
+	}
+
+	if (ferror(fp))
+	{
+		errno = EIO;
+		fclose(fp);
+		return -1;
+	}
+
+	fclose(fp);
+	return 0;
 }
 
 int app_config_parse(app_config_t *cfg, int argc, char **argv)
@@ -42,9 +238,49 @@ int app_config_parse(app_config_t *cfg, int argc, char **argv)
 		return -1;
 	}
 
+	const char *config_path = APP_DEFAULT_CONFIG_PATH;
+	bool user_provided_config_path = false;
+
 	for (int i = 1; i < argc; ++i)
 	{
-		if (strcmp(argv[i], "--port") == 0 && i + 1 < argc)
+		if (strcmp(argv[i], "--config") == 0)
+		{
+			if (i + 1 >= argc)
+			{
+				print_usage_and_exit(argv[0]);
+			}
+			config_path = argv[++i];
+			user_provided_config_path = true;
+		}
+	}
+
+	if (app_config_load_file(cfg, config_path) != 0)
+	{
+		if (user_provided_config_path || errno != ENOENT)
+		{
+			if (errno == EINVAL)
+			{
+				fprintf(stderr, "Invalid config file: %s\n", config_path);
+			}
+			else
+			{
+				perror(config_path);
+			}
+			return -1;
+		}
+	}
+
+	for (int i = 1; i < argc; ++i)
+	{
+		if (strcmp(argv[i], "--config") == 0)
+		{
+			if (i + 1 >= argc)
+			{
+				print_usage_and_exit(argv[0]);
+			}
+			++i;
+		}
+		else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc)
 		{
 			cfg->ws_port = (uint16_t)atoi(argv[++i]);
 		}

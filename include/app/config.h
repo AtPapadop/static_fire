@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <net/if.h>
 
+#define APP_DEFAULT_CONFIG_PATH "/etc/ws_server/ws_server.conf"
+
 typedef struct {
 	uint16_t ws_port;
 	int max_clients;

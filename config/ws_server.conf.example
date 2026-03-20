@@ -1,0 +1,18 @@
+# ws_server configuration file
+# Format: key=value
+# Lines starting with # or ; are comments.
+
+# Server configuration
+ws_port=8080
+max_clients=128
+read_only=false
+tick_ms=5
+
+# Logging configuration
+logging=false
+log_path=/usr/local/data/ws_can_bridge.csv
+
+# CAN configuration
+auto_config_can=true
+can_bitrate=500000
+can_ifname=can0

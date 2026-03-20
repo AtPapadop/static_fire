@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(dual_a7_bridge C)
+project(ws_server C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -11,7 +11,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 find_package(Threads REQUIRED)
 find_package(simple_ws REQUIRED)
 
-add_executable(dual_a7_bridge
+add_executable(ws_server
   src/main.c
   src/app/config.c
   src/app/context.c
@@ -25,15 +25,17 @@ add_executable(dual_a7_bridge
   src/ws/ws_bridge.c
 )
 
-target_include_directories(dual_a7_bridge PRIVATE include)
+target_include_directories(ws_server PRIVATE include)
 
-target_compile_options(dual_a7_bridge PRIVATE
+if(TARGET simple_ws::simple_ws_shared)
+  target_link_libraries(ws_server PRIVATE simple_ws::simple_ws_shared)
+else()
+  target_link_libraries(ws_server PRIVATE simple_ws::simple_ws)
+endif()
+target_link_libraries(ws_server PRIVATE Threads::Threads)
+
+target_compile_options(ws_server PRIVATE
   -Wall
   -Wextra
   -Wpedantic
-)
-
-target_link_libraries(dual_a7_bridge PRIVATE
-  Threads::Threads
-  simple_ws::simple_ws
 )
