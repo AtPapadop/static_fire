@@ -1,0 +1,28 @@
+[Unit]
+Description=dual_a7_bridge WebSocket to CAN bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust to your installed binary path.
+ExecStart=/usr/local/bin/ws_server --config /etc/ws_server/ws_server.conf
+Restart=on-failure
+RestartSec=2
+
+# Route all application logs to journald.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ws_server
+
+# CAN interface setup requires elevated privileges.
+User=root
+Group=root
+
+# If you run as non-root, remove User/Group above and grant needed capabilities.
+# AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+# CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+# NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

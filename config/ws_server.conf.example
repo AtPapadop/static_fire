@@ -9,7 +9,7 @@ read_only=false
 tick_ms=5
 
 # Logging configuration
-logging=false
+logging=true
 log_path=/usr/local/data/ws_can_bridge.csv
 
 # CAN configuration

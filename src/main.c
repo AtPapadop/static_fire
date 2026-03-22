@@ -23,6 +23,12 @@
 
 static app_context_t *g_app = NULL;
 
+static void configure_stdio_for_service(void)
+{
+	(void)setvbuf(stdout, NULL, _IOLBF, 0);
+	(void)setvbuf(stderr, NULL, _IOLBF, 0);
+}
+
 static void on_signal(int sig)
 {
 	(void)sig;
@@ -137,6 +143,8 @@ static void flush_can_updates(app_context_t *app)
 
 int main(int argc, char **argv)
 {
+	configure_stdio_for_service();
+
 	app_config_t cfg;
 	app_config_init_defaults(&cfg);
 	if (app_config_parse(&cfg, argc, argv) != 0)
@@ -228,7 +236,7 @@ int main(int argc, char **argv)
 				uint64_t now_ms = heartbeat_now_ms();
 				if (now_ms >= next_heartbeat_ms)
 				{
-					if (heartbeat_send(app.can_fd) != 0)
+					if (heartbeat_send(app.can_fd) != 0 && errno != ENOBUFS)
 					{
 						perror("heartbeat_send");
 					}

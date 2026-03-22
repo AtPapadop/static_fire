@@ -129,3 +129,35 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build
 ./bin/dual_a7_bridge --can-if can0 --port 8080
 ```
+
+## systemd Service
+
+An example unit file is provided at:
+
+```text
+config/ws_server.service.example
+```
+
+To install it:
+
+```bash
+cmake -S . -B build -DWS_SERVER_INSTALL_SYSTEM_FILES=ON
+cmake --build build
+sudo cmake --install build
+sudo systemctl daemon-reload
+sudo systemctl enable --now ws_server.service
+```
+
+Install behavior with `WS_SERVER_INSTALL_SYSTEM_FILES=ON`:
+
+- Installs binary to `${CMAKE_INSTALL_PREFIX}/bin` (default `/usr/local/bin/ws_server`).
+- Installs `config/ws_server.service.example` as `/etc/systemd/system/ws_server.service`.
+- Installs `config/ws_server.conf.example` as `/etc/ws_server/ws_server.conf` only if that file does not already exist.
+
+View logs:
+
+```bash
+journalctl -u ws_server.service -f
+```
+
+The service example sends both stdout and stderr to journald, so `printf`, `fprintf(stderr, ...)`, and `perror(...)` output is available via `journalctl`.
