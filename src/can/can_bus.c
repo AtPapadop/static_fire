@@ -85,7 +85,7 @@ int can_bus_configure_interface(const char *ifname, uint32_t bitrate)
 	{
 		return -1;
 	}
-	
+
 	printf("Configuring GPIO line %d to enable CAN transceiver\n", CAN_STB_GPIO_LINE);
 	if (run_command(gpio_cmd) != 0)
 	{
@@ -209,7 +209,7 @@ void can_bus_store_rx(struct app_context *app, const struct can_frame *frame)
 	app->can_dirty[id] = true;
 	pthread_mutex_unlock(&app->can_lock);
 
-logger_printf(&app->logger, "CAN_RX", "%03" PRIx32 "#%04" PRIx16, id, value);
+	logger_printf(&app->logger, "CAN_RX", "%03" PRIx32 "#%04" PRIx16, id, value);
 }
 
 size_t can_bus_format_dirty(struct app_context *app, char *buffer, size_t capacity)
