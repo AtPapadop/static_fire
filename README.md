@@ -1,6 +1,6 @@
-# dual_a7_bridge
+# ws_server
 
-`dual_a7_bridge` is a C99 WebSocket-to-CAN bridge for Linux.
+`ws_server` is a C99 WebSocket-to-CAN bridge for Linux.
 It accepts text commands over WebSocket, sends/receives CAN traffic, and supports higher-level control flows such as firing sequences and wiggle operations.
 
 ## Dependency: simple_ws
@@ -40,37 +40,45 @@ cmake --build build
 The executable is written to:
 
 ```text
-./bin/dual_a7_bridge
+./bin/ws_server
 ```
 
 ## Run
 
-Basic run:
+Basic run (uses defaults and default config file at `/etc/ws_server/ws_server.conf`):
 
 ```bash
-./bin/dual_a7_bridge
+./bin/ws_server
+```
+
+Run with config file override:
+
+```bash
+./bin/ws_server --config /path/to/config.conf
 ```
 
 Run with explicit options:
 
 ```bash
-./bin/dual_a7_bridge --port 8080 --max-clients 128 --can-if can0 --can-bitrate 500000 --tick-ms 5
+./bin/ws_server --port 8080 --max-clients 128 --can-if can0 --can-bitrate 500000 --tick-ms 5
 ```
 
 Enable logging:
 
 ```bash
-./bin/dual_a7_bridge --logging --log-path /tmp/ws_can_bridge.csv
+./bin/ws_server --logging --log-path /tmp/ws_can_bridge.csv
 ```
 
 Read-only mode (blocks write commands):
 
 ```bash
-./bin/dual_a7_bridge --read-only
+./bin/ws_server --read-only
 ```
 
 ### CLI Options
 
+- `-h`, `--help`: show this help message and exit
+- `--config PATH`: path to config file (default: `/etc/ws_server/ws_server.conf`)
 - `--port N`: WebSocket server port (default: `8080`)
 - `--max-clients N`: max concurrent WebSocket clients (default: `128`)
 - `--read-only`: reject command execution
@@ -127,7 +135,7 @@ You may optionally prefix any command with `CAN1|`.
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build
-./bin/dual_a7_bridge --can-if can0 --port 8080
+./bin/ws_server --can-if can0 --port 8080
 ```
 
 ## systemd Service

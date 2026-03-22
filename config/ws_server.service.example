@@ -1,5 +1,5 @@
 [Unit]
-Description=dual_a7_bridge WebSocket to CAN bridge
+Description=WebSocket server with CAN bridge
 After=network-online.target
 Wants=network-online.target
 
