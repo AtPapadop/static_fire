@@ -42,6 +42,11 @@ target_compile_options(ws_server PRIVATE
   -Wpedantic
 )
 
+# Keep runtime lookup for simple_ws after installation under /usr/local/bin.
+set_target_properties(ws_server PROPERTIES
+  INSTALL_RPATH "/usr/local/lib"
+  INSTALL_RPATH_USE_LINK_PATH TRUE
+)
 option(WS_SERVER_INSTALL_SYSTEM_FILES "Install ws_server config and systemd unit under /etc" OFF)
 
 install(TARGETS ws_server
