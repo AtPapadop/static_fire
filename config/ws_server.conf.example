@@ -9,10 +9,10 @@ read_only=false
 tick_ms=5
 
 # Logging configuration
-logging=true
-log_path=/usr/local/data/ws_can_bridge.csv
+logging=false
+log_dir=/var/log/simple_ws
 
 # CAN configuration
 auto_config_can=true
-can_bitrate=500000
+can_bitrate=1000000
 can_ifname=can0

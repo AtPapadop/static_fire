@@ -13,7 +13,7 @@ typedef struct {
     pthread_mutex_t lock;
 } logger_t;
 
-int logger_open(logger_t *logger, bool enabled, const char *path);
+int logger_open(logger_t *logger, bool enabled, const char *log_dir);
 void logger_close(logger_t *logger);
 void logger_write(logger_t *logger, const char *kind, const void *payload, size_t len);
 void logger_printf(logger_t *logger, const char *kind, const char *fmt, ...);

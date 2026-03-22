@@ -16,7 +16,7 @@ typedef struct {
 	int tick_interval_ms;
 	uint32_t can_bitrate;
 	char can_ifname[IF_NAMESIZE];
-	char log_path[256];
+	char log_dir[256];
 } app_config_t;
 
 void app_config_init_defaults(app_config_t *cfg);

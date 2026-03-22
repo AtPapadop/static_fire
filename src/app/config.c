@@ -25,7 +25,7 @@ void app_config_init_defaults(app_config_t *cfg)
 	cfg->tick_interval_ms = 5;
 	cfg->can_bitrate = 500000u;
 	snprintf(cfg->can_ifname, sizeof(cfg->can_ifname), "can0");
-	snprintf(cfg->log_path, sizeof(cfg->log_path), "/usr/local/data/ws_can_bridge.csv");
+	snprintf(cfg->log_dir, sizeof(cfg->log_dir), "/var/log/simple_ws");
 }
 
 static void print_usage_and_exit(const char *argv0)
@@ -33,7 +33,7 @@ static void print_usage_and_exit(const char *argv0)
 	fprintf(stderr,
 					"Usage: %s [--config PATH] [--port N] [--max-clients N] [--read-only] [--logging] "
 					"[--can-if can0] [--can-bitrate N] [--no-can-config] "
-					"[--tick-ms N] [--log-path PATH]\n",
+					"[--tick-ms N] [--log-dir PATH]\n",
 					argv0);
 	exit(EXIT_FAILURE);
 }
@@ -156,9 +156,9 @@ static int apply_config_kv(app_config_t *cfg, const char *key, const char *value
 	{
 		snprintf(cfg->can_ifname, sizeof(cfg->can_ifname), "%s", value);
 	}
-	else if (strcmp(key, "log_path") == 0)
+	else if (strcmp(key, "log_dir") == 0 || strcmp(key, "log_path") == 0)
 	{
-		snprintf(cfg->log_path, sizeof(cfg->log_path), "%s", value);
+		snprintf(cfg->log_dir, sizeof(cfg->log_dir), "%s", value);
 	}
 	else
 	{
@@ -312,9 +312,9 @@ int app_config_parse(app_config_t *cfg, int argc, char **argv)
 		{
 			cfg->tick_interval_ms = atoi(argv[++i]);
 		}
-		else if (strcmp(argv[i], "--log-path") == 0 && i + 1 < argc)
+		else if ((strcmp(argv[i], "--log-dir") == 0 || strcmp(argv[i], "--log-path") == 0) && i + 1 < argc)
 		{
-			snprintf(cfg->log_path, sizeof(cfg->log_path), "%s", argv[++i]);
+			snprintf(cfg->log_dir, sizeof(cfg->log_dir), "%s", argv[++i]);
 		}
 		else
 		{
@@ -347,6 +347,6 @@ void app_config_print(const app_config_t *cfg)
 	printf("Tick interval: %d ms\n", cfg->tick_interval_ms);
 	if (cfg->logging_enabled)
 	{
-		printf("Log path: %s\n", cfg->log_path);
+		printf("Log dir: %s\n", cfg->log_dir);
 	}
 }

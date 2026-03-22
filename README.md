@@ -66,7 +66,7 @@ Run with explicit options:
 Enable logging:
 
 ```bash
-./bin/ws_server --logging --log-path /tmp/ws_can_bridge.csv
+./bin/ws_server --logging --log-dir /var/log/simple_ws
 ```
 
 Read-only mode (blocks write commands):
@@ -87,7 +87,11 @@ Read-only mode (blocks write commands):
 - `--can-bitrate N`: CAN bitrate in bits/s used for auto-config (default: `500000`)
 - `--no-can-config`: disable startup CAN auto-configuration (`ip link ...`)
 - `--tick-ms N`: internal tick interval in ms (default: `5`)
-- `--log-path PATH`: log output path (default: `/usr/local/data/ws_can_bridge.csv`)
+- `--log-dir PATH`: log output directory (default: `/var/log/simple_ws`)
+
+When logging is enabled, `ws_server` creates a timestamped CSV file at startup using this pattern:
+
+- `simple_ws_YYYYMMDD_HHMMSS.csv`
 
 ## CAN Interface Setup
 

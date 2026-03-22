@@ -162,7 +162,7 @@ int main(int argc, char **argv)
 
 	app_config_print(&cfg);
 
-	if (logger_open(&app.logger, cfg.logging_enabled, cfg.log_path) != 0)
+	if (logger_open(&app.logger, cfg.logging_enabled, cfg.log_dir) != 0)
 	{
 		perror("logger_open");
 		app_context_cleanup(&app);
