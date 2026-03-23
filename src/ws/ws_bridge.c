@@ -127,8 +127,14 @@ static void on_message(ws_server_t *server, ws_client_t *client, const ws_frame_
 		return;
 	}
 
-	if (frame->type != WS_TEXT_FRAME)
+	if (frame->type != WS_TEXT_FRAME && frame->type != WS_PING_FRAME)
 	{
+		return;
+	}
+
+	if (frame->type == WS_PING_FRAME)
+	{
+		ws_server_send_pong(app->ws, client);
 		return;
 	}
 
