@@ -247,7 +247,13 @@ void ws_bridge_broadcast_text(app_context_t *app, const char *msg, bool prefix_t
 	logger_write(&app->logger, "WS_TX", payload, strlen(payload));
 
 	pthread_mutex_lock(&app->clients_lock);
-	ws_server_broadcast_text(app->ws, payload);
+	for (app_client_ctx_t *ctx = app->clients; ctx; ctx = ctx->next)
+	{
+		if (ws_client_is_connected(ctx->client) && ws_client_handshake_done(ctx->client) && !ctx->write_only)
+		{
+			ws_server_send_text(app->ws, ctx->client, payload);
+		}
+	}
 	pthread_mutex_unlock(&app->clients_lock);
 
 	free(heap_buf);
