@@ -11,7 +11,7 @@ set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
 find_package(Threads REQUIRED)
-find_package(simple_ws REQUIRED)
+find_package(simple_ws 0.2.1 REQUIRED)
 
 add_executable(ws_server
   src/main.c

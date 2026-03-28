@@ -11,6 +11,7 @@ typedef struct {
 	uint16_t ws_port;
 	int max_clients;
 	bool read_only;
+	bool testing_mode;
 	bool logging_enabled;
 	bool auto_config_can;
 	int tick_interval_ms;

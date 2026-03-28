@@ -20,6 +20,7 @@ void app_config_init_defaults(app_config_t *cfg)
 	cfg->ws_port = 8080;
 	cfg->max_clients = 128;
 	cfg->read_only = false;
+	cfg->testing_mode = false;
 	cfg->logging_enabled = false;
 	cfg->auto_config_can = true;
 	cfg->tick_interval_ms = 5;
@@ -31,7 +32,7 @@ void app_config_init_defaults(app_config_t *cfg)
 static void print_usage_and_exit(const char *argv0)
 {
 	fprintf(stderr,
-					"Usage: %s [--config PATH] [--port N] [--max-clients N] [--read-only] [--logging] "
+					"Usage: %s [--config PATH] [--port N] [--max-clients N] [--read-only] [--testing] [--logging] "
 					"[--can-if can0] [--can-bitrate N] [--no-can-config] "
 					"[--tick-ms N] [--log-dir PATH]\n",
 					argv0);
@@ -113,6 +114,14 @@ static int apply_config_kv(app_config_t *cfg, const char *key, const char *value
 		if (parse_bool_value(value, &cfg->read_only) != 0)
 		{
 			fprintf(stderr, "%s:%d invalid read_only value: %s\n", config_path, line_no, value);
+			return -1;
+		}
+	}
+	else if (strcmp(key, "testing_mode") == 0 || strcmp(key, "testing") == 0)
+	{
+		if (parse_bool_value(value, &cfg->testing_mode) != 0)
+		{
+			fprintf(stderr, "%s:%d invalid testing_mode value: %s\n", config_path, line_no, value);
 			return -1;
 		}
 	}
@@ -292,6 +301,10 @@ int app_config_parse(app_config_t *cfg, int argc, char **argv)
 		{
 			cfg->read_only = true;
 		}
+		else if (strcmp(argv[i], "--testing") == 0)
+		{
+			cfg->testing_mode = true;
+		}
 		else if (strcmp(argv[i], "--logging") == 0)
 		{
 			cfg->logging_enabled = true;
@@ -340,6 +353,7 @@ void app_config_print(const app_config_t *cfg)
 	printf("WebSocket port: %u\n", cfg->ws_port);
 	printf("Max clients: %d\n", cfg->max_clients);
 	printf("Read only: %s\n", cfg->read_only ? "yes" : "no");
+	printf("Testing mode: %s\n", cfg->testing_mode ? "yes" : "no");
 	printf("Logging: %s\n", cfg->logging_enabled ? "yes" : "no");
 	printf("CAN interface: %s\n", cfg->can_ifname);
 	printf("CAN bitrate: %u\n", cfg->can_bitrate);

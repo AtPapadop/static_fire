@@ -2,6 +2,7 @@
 
 #include <inttypes.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,16 @@
 static void send_reply(app_context_t *app, ws_client_t *client, const char *msg)
 {
 	ws_bridge_send_text(app, client, msg);
+}
+
+static void send_replyf(app_context_t *app, ws_client_t *client, const char *fmt, ...)
+{
+	char msg[512];
+	va_list args;
+	va_start(args, fmt);
+	(void)vsnprintf(msg, sizeof(msg), fmt, args);
+	va_end(args);
+	send_reply(app, client, msg);
 }
 
 static const char *strip_can_prefix(const char *text)
@@ -49,6 +60,29 @@ static bool handle_read_toggle(app_context_t *app, ws_client_t *client, const ch
 		send_reply(app, client, "Write-only mode disabled");
 		return true;
 	}
+	return false;
+}
+
+static bool parse_raw_can_fields(const char *text, uint32_t *id, uint16_t *value, uint16_t *duration_ms, bool *has_duration)
+{
+	if (!text || !id || !value || !duration_ms || !has_duration)
+	{
+		return false;
+	}
+
+	if (sscanf(text, "%" SCNx32 "#%" SCNx16 "#%" SCNu16, id, value, duration_ms) == 3)
+	{
+		*has_duration = true;
+		return true;
+	}
+
+	if (sscanf(text, "%" SCNx32 "#%" SCNx16, id, value) == 2)
+	{
+		*has_duration = false;
+		*duration_ms = 0;
+		return true;
+	}
+
 	return false;
 }
 
@@ -320,40 +354,340 @@ static bool handle_raw_can(app_context_t *app, ws_client_t *client, const char *
 	uint32_t id = 0;
 	uint16_t value = 0;
 	uint16_t duration_ms = 0;
+	bool has_duration = false;
 
-	if (sscanf(text, "%" SCNx32 "#%" SCNx16 "#%" SCNu16, &id, &value, &duration_ms) == 3)
+	if (!parse_raw_can_fields(text, &id, &value, &duration_ms, &has_duration))
 	{
-		if (can_bus_send_command(app->can_fd, id, value, duration_ms) == 0)
+		return false;
+	}
+
+	if (can_bus_send_command(app->can_fd, id, value, duration_ms) == 0)
+	{
+		if (has_duration)
 		{
 			logger_printf(&app->logger, "CAN_TX", "%03" PRIx32 "#%04" PRIx16 "#%u", id, value, duration_ms);
-			send_reply(app, client, "Message sent");
 		}
 		else
-		{
-			char error_msg[128];
-			snprintf(error_msg, sizeof(error_msg), "Error sending message: %s", strerror(errno));
-			send_reply(app, client, error_msg);
-		}
-		return true;
-	}
-
-	if (sscanf(text, "%" SCNx32 "#%" SCNx16, &id, &value) == 2)
-	{
-		if (can_bus_send_command(app->can_fd, id, value, 0) == 0)
 		{
 			logger_printf(&app->logger, "CAN_TX", "%03" PRIx32 "#%04" PRIx16, id, value);
-			send_reply(app, client, "Message sent");
 		}
-		else
-		{
-			char error_msg[128];
-			snprintf(error_msg, sizeof(error_msg), "Error sending message: %s", strerror(errno));
-			send_reply(app, client, error_msg);
-		}
+		send_reply(app, client, "Message sent");
+	}
+	else
+	{
+		char error_msg[128];
+		snprintf(error_msg, sizeof(error_msg), "Error sending message: %s", strerror(errno));
+		send_reply(app, client, error_msg);
+	}
+
+	return true;
+}
+
+static bool handle_testing_state(app_context_t *app, ws_client_t *client, const char *text)
+{
+	if (strncmp(text, "STATE#", 6) != 0)
+	{
+		return false;
+	}
+
+	const char *requested = text + 6;
+	if (strcmp(requested, "PRECHILLING") == 0)
+	{
+		send_reply(app, client, "TESTING parsed STATE command: PRECHILLING");
+		return true;
+	}
+	if (strcmp(requested, "HOTFIRE") == 0)
+	{
+		send_reply(app, client, "TESTING parsed STATE command: HOTFIRE");
 		return true;
 	}
 
-	return false;
+	send_reply(app, client, "TESTING parse error: unknown STATE value");
+	return true;
+}
+
+static bool handle_testing_set_valve(app_context_t *app, ws_client_t *client, const char *text)
+{
+	if (strncmp(text, "SET_VALVE", 9) != 0)
+	{
+		return false;
+	}
+
+	char valve_name[32];
+	uint32_t value = 0;
+	if (sscanf(text + 9, "#%31[^#]#%" SCNx32, valve_name, &value) != 2)
+	{
+		send_reply(app, client, "TESTING parse error: SET_VALVE format");
+		return true;
+	}
+
+	if (strcmp(valve_name, "LOX_MAIN") == 0 || strcmp(valve_name, "LOX_VENT") == 0)
+	{
+		if (value > 0x7FFu)
+		{
+			send_reply(app, client, "TESTING parse error: valve CAN id out of range");
+			return true;
+		}
+		send_replyf(app, client, "TESTING parsed SET_VALVE: %s=0x%03" PRIx32, valve_name, value);
+		return true;
+	}
+
+	if (strcmp(valve_name, "LOX_MAIN_ANGLE_OPEN") == 0 || strcmp(valve_name, "LOX_VENT_ANGLE_CLOSE") == 0)
+	{
+		if (value > 0x0B4u)
+		{
+			send_reply(app, client, "TESTING parse error: valve angle out of range");
+			return true;
+		}
+		send_replyf(app, client, "TESTING parsed SET_VALVE: %s=0x%03" PRIx32, valve_name, value);
+		return true;
+	}
+
+	send_reply(app, client, "TESTING parse error: unknown SET_VALVE field");
+	return true;
+}
+
+static bool handle_testing_wiggle_stop(app_context_t *app, ws_client_t *client, char *command)
+{
+	if (strncmp(command, "WIGGLE_STOP", 11) != 0)
+	{
+		return false;
+	}
+
+	char *saveptr = NULL;
+	(void)strtok_r(command, "|", &saveptr);
+	size_t ids = 0;
+	bool parse_error = false;
+
+	char *token = NULL;
+	while ((token = strtok_r(NULL, "|", &saveptr)) != NULL)
+	{
+		uint32_t id = 0;
+		if (sscanf(token, "%" SCNx32, &id) != 1)
+		{
+			parse_error = true;
+			break;
+		}
+		++ids;
+	}
+
+	if (parse_error || ids == 0)
+	{
+		send_reply(app, client, "TESTING parse error: WIGGLE_STOP format");
+	}
+	else
+	{
+		send_replyf(app, client, "TESTING parsed WIGGLE_STOP: %zu id(s)", ids);
+	}
+	return true;
+}
+
+static bool handle_testing_wiggle(app_context_t *app, ws_client_t *client, char *command)
+{
+	if (strncmp(command, "WIGGLE", 6) != 0 || strncmp(command, "WIGGLE_STOP", 11) == 0)
+	{
+		return false;
+	}
+
+	char *saveptr = NULL;
+	(void)strtok_r(command, "|", &saveptr);
+	size_t blocks = 0;
+	bool parse_error = false;
+
+	char *token = NULL;
+	while ((token = strtok_r(NULL, "|", &saveptr)) != NULL)
+	{
+		uint32_t id = 0;
+		uint16_t start_value = 0;
+		uint16_t end_value = 0;
+		uint16_t exit_value = 0;
+		uint32_t period_ms = 0;
+		uint32_t total_ms = 0;
+
+		int parsed = sscanf(token,
+											"%" SCNx32 "#%" SCNx16 "#%" SCNx16 "#%" SCNx16 "#%" SCNu32 "#%" SCNu32,
+											&id,
+											&start_value,
+											&end_value,
+											&exit_value,
+											&period_ms,
+											&total_ms);
+		if (parsed == 5)
+		{
+			total_ms = 0;
+		}
+		else if (parsed != 6)
+		{
+			parse_error = true;
+			break;
+		}
+
+		if (id > 0x7FFu || period_ms == 0)
+		{
+			parse_error = true;
+			break;
+		}
+
+		++blocks;
+	}
+
+	if (parse_error || blocks == 0)
+	{
+		send_reply(app, client, "TESTING parse error: WIGGLE format");
+	}
+	else
+	{
+		send_replyf(app, client, "TESTING parsed WIGGLE: %zu block(s)", blocks);
+	}
+	return true;
+}
+
+static bool handle_testing_fire(app_context_t *app, ws_client_t *client, const char *text)
+{
+	if (strncmp(text, "FIRE#8765", 9) != 0)
+	{
+		return false;
+	}
+
+	firing_sequence_config_t config;
+	if (firing_sequence_parse(text, &config) != 0)
+	{
+		send_reply(app, client, "TESTING parse error: FIRE format");
+		return true;
+	}
+
+	char msg[512];
+	int len = snprintf(msg, sizeof(msg), "TESTING parsed FIRE: %u block(s)", config.num_blocks);
+	for (uint8_t i = 0; i < config.num_blocks && len > 0 && (size_t)len < sizeof(msg); ++i)
+	{
+		len += snprintf(msg + len,
+								 sizeof(msg) - (size_t)len,
+								 "%s%03" PRIx32 "#%04" PRIx16 "#%u",
+								 i == 0 ? " (" : ", ",
+								 config.ids[i],
+								 config.values[i][0],
+								 config.values[i][1]);
+	}
+	if (len > 0 && (size_t)len < sizeof(msg))
+	{
+		len += snprintf(msg + len, sizeof(msg) - (size_t)len, ")");
+		(void)len;
+	}
+
+	send_reply(app, client, msg);
+	return true;
+}
+
+static bool handle_testing_drown(app_context_t *app, ws_client_t *client, const char *text)
+{
+	if (strcmp(text, "DROWN#8765") != 0)
+	{
+		return false;
+	}
+
+	send_reply(app, client, "TESTING parsed DROWN command");
+	return true;
+}
+
+static bool handle_testing_abort(app_context_t *app, ws_client_t *client, const char *text)
+{
+	if (strcmp(text, "ABORT#8765") != 0)
+	{
+		return false;
+	}
+
+	send_reply(app, client, "TESTING parsed ABORT command");
+	return true;
+}
+
+static bool handle_testing_raw_can(app_context_t *app, ws_client_t *client, const char *text)
+{
+	uint32_t id = 0;
+	uint16_t value = 0;
+	uint16_t duration_ms = 0;
+	bool has_duration = false;
+
+	if (!parse_raw_can_fields(text, &id, &value, &duration_ms, &has_duration))
+	{
+		return false;
+	}
+
+	if (id > 0x7FFu)
+	{
+		send_reply(app, client, "TESTING parse error: CAN id out of range");
+		return true;
+	}
+
+	if (has_duration)
+	{
+		send_replyf(app,
+						client,
+						"TESTING parsed RAW CAN: id=0x%03" PRIx32 " value=0x%04" PRIx16 " duration=%u",
+						id,
+						value,
+						duration_ms);
+	}
+	else
+	{
+		send_replyf(app,
+						client,
+						"TESTING parsed RAW CAN: id=0x%03" PRIx32 " value=0x%04" PRIx16,
+						id,
+						value);
+	}
+
+	return true;
+}
+
+static void handle_testing_command(app_context_t *app, ws_client_t *client, const char *normalized)
+{
+	if (handle_testing_abort(app, client, normalized))
+	{
+		return;
+	}
+	if (handle_testing_state(app, client, normalized))
+	{
+		return;
+	}
+	if (handle_testing_set_valve(app, client, normalized))
+	{
+		return;
+	}
+
+	char *mutable = strdup(normalized);
+	if (!mutable)
+	{
+		send_reply(app, client, "Server error: out of memory");
+		return;
+	}
+
+	if (handle_testing_wiggle_stop(app, client, mutable))
+	{
+		free(mutable);
+		return;
+	}
+	strcpy(mutable, normalized);
+	if (handle_testing_wiggle(app, client, mutable))
+	{
+		free(mutable);
+		return;
+	}
+	free(mutable);
+
+	if (handle_testing_drown(app, client, normalized))
+	{
+		return;
+	}
+	if (handle_testing_fire(app, client, normalized))
+	{
+		return;
+	}
+	if (handle_testing_raw_can(app, client, normalized))
+	{
+		return;
+	}
+
+	send_reply(app, client, "TESTING invalid command");
 }
 
 void command_handle_text(app_context_t *app, ws_client_t *client, const char *text)
@@ -368,13 +702,18 @@ void command_handle_text(app_context_t *app, ws_client_t *client, const char *te
 		return;
 	}
 
+	const char *normalized = strip_can_prefix(text);
+	if (app->config.testing_mode)
+	{
+		handle_testing_command(app, client, normalized);
+		return;
+	}
+
 	if (app->config.read_only)
 	{
 		send_reply(app, client, "The client is not allowed to execute commands");
 		return;
 	}
-
-	const char *normalized = strip_can_prefix(text);
 
 	if (handle_abort(app, client, normalized))
 	{

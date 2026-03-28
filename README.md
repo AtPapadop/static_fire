@@ -63,6 +63,12 @@ Run with explicit options:
 ./bin/ws_server --port 8080 --max-clients 128 --can-if can0 --can-bitrate 500000 --tick-ms 5
 ```
 
+Testing mode (no CAN setup, no CAN I/O, command parsing replies only):
+
+```bash
+./bin/ws_server --testing
+```
+
 Enable logging:
 
 ```bash
@@ -82,6 +88,7 @@ Read-only mode (blocks write commands):
 - `--port N`: WebSocket server port (default: `8080`)
 - `--max-clients N`: max concurrent WebSocket clients (default: `128`)
 - `--read-only`: reject command execution
+- `--testing`: testing mode; skip CAN runtime and reply with parsed-command text
 - `--logging`: enable CSV logging
 - `--can-if IFACE`: CAN interface name (default: `can0`)
 - `--can-bitrate N`: CAN bitrate in bits/s used for auto-config (default: `500000`)
@@ -133,6 +140,7 @@ You may optionally prefix any command with `CAN1|`.
 - When server starts in global `--read-only` mode, command execution is denied.
 - In `PRECHILLING` state, non-wiggle operational commands are ignored.
 - Firing sequence start includes an internal T-10s delay for standard `FIRE` commands.
+- In `--testing` mode, command handlers do not execute CAN/control actions and instead reply with parse results.
 
 ## Typical Developer Workflow
 

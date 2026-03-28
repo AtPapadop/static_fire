@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <linux/can.h>
@@ -49,6 +50,11 @@ static int register_fd(int epoll_fd, int fd)
 
 static int init_runtime(app_context_t *app)
 {
+	if (app->config.testing_mode)
+	{
+		return 0;
+	}
+
 	if (app->config.auto_config_can)
 	{
 		if (can_bus_configure_interface(app->config.can_ifname, app->config.can_bitrate) != 0)
@@ -185,69 +191,84 @@ int main(int argc, char **argv)
 	}
 
 	printf("Listening on ws://0.0.0.0:%u using CAN interface %s\n", cfg.ws_port, cfg.can_ifname);
+	if (cfg.testing_mode)
+	{
+		printf("Testing mode enabled: CAN, heartbeat, and wiggle runtime are disabled\n");
+	}
 	uint64_t next_heartbeat_ms = heartbeat_now_ms() + HEARTBEAT_PERIOD_MS;
 
-	struct epoll_event events[8];
-	while (!app.stop)
+	if (cfg.testing_mode)
 	{
-		int n = epoll_wait(app.epoll_fd, events, 8, 500);
-		if (n < 0)
+		while (!app.stop)
 		{
-			if (errno == EINTR)
-			{
-				continue;
-			}
-			perror("epoll_wait");
-			break;
+			struct timespec ts = {.tv_sec = 0, .tv_nsec = 200 * 1000 * 1000};
+			nanosleep(&ts, NULL);
 		}
-
-		for (int i = 0; i < n; ++i)
+	}
+	else
+	{
+		struct epoll_event events[8];
+		while (!app.stop)
 		{
-			if (events[i].data.fd == app.can_fd)
+			int n = epoll_wait(app.epoll_fd, events, 8, 500);
+			if (n < 0)
 			{
-				for (;;)
+				if (errno == EINTR)
 				{
-					struct can_frame frame;
-					int rc = can_bus_read_frame(app.can_fd, &frame);
-					if (rc == 1)
-					{
-						can_bus_store_rx(&app, &frame);
-					}
-					else if (rc == 0)
-					{
-						break;
-					}
-					else
-					{
-						if (errno != EAGAIN && errno != EWOULDBLOCK)
-						{
-							perror("can read");
-						}
-						break;
-					}
+					continue;
 				}
+				perror("epoll_wait");
+				break;
 			}
-			else if (events[i].data.fd == app.timer_fd)
-			{
-				uint64_t expirations = 0;
-				(void)read(app.timer_fd, &expirations, sizeof(expirations));
-				wiggle_process(&app);
 
-				uint64_t now_ms = heartbeat_now_ms();
-				if (now_ms >= next_heartbeat_ms)
+			for (int i = 0; i < n; ++i)
+			{
+				if (events[i].data.fd == app.can_fd)
 				{
-					if (heartbeat_send(app.can_fd) != 0 && errno != ENOBUFS)
+					for (;;)
 					{
-						perror("heartbeat_send");
+						struct can_frame frame;
+						int rc = can_bus_read_frame(app.can_fd, &frame);
+						if (rc == 1)
+						{
+							can_bus_store_rx(&app, &frame);
+						}
+						else if (rc == 0)
+						{
+							break;
+						}
+						else
+						{
+							if (errno != EAGAIN && errno != EWOULDBLOCK)
+							{
+								perror("can read");
+							}
+							break;
+						}
+					}
+				}
+				else if (events[i].data.fd == app.timer_fd)
+				{
+					uint64_t expirations = 0;
+					(void)read(app.timer_fd, &expirations, sizeof(expirations));
+					wiggle_process(&app);
+
+					uint64_t now_ms = heartbeat_now_ms();
+					if (now_ms >= next_heartbeat_ms)
+					{
+						if (heartbeat_send(app.can_fd) != 0 && errno != ENOBUFS)
+						{
+							perror("heartbeat_send");
+						}
+
+						do
+						{
+							next_heartbeat_ms += HEARTBEAT_PERIOD_MS;
+						} while (next_heartbeat_ms <= now_ms);
 					}
 
-					do
-					{
-						next_heartbeat_ms += HEARTBEAT_PERIOD_MS;
-					} while (next_heartbeat_ms <= now_ms);
+					flush_can_updates(&app);
 				}
-
-				flush_can_updates(&app);
 			}
 		}
 	}
