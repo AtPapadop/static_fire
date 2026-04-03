@@ -6,11 +6,19 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <limits.h>
+#include <sys/types.h>
 
 typedef struct {
     bool enabled;
     FILE *fp;
     pthread_mutex_t lock;
+    char log_dir[PATH_MAX];
+    char current_path[PATH_MAX];
+    uint64_t next_maintenance_ms;
+    bool cyclic_mode;
+    off_t cyclic_write_offset;
+    off_t cyclic_capacity_bytes;
 } logger_t;
 
 int logger_open(logger_t *logger, bool enabled, const char *log_dir);
